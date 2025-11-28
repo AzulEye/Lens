@@ -1,5 +1,5 @@
 import torch
-from diffusers import  DPMSolverMultistepScheduler # StableDiffusionPipeline
+from diffusers_local.src.diffusers import DPMSolverMultistepScheduler # Use diffusers_local for all imports
 import os
 from diffusers_local.src.diffusers import (StableDiffusionPipeline, StableDiffusionXLPipeline,
                                            IFPipeline, IFSuperResolutionPipeline) # StableDiffusionPipeline
@@ -31,9 +31,14 @@ def stable_glass_sd(args_list, multiple_args=True):
         args.seed = 42
     seed = args.seed
 
+    # Detect available device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
     generator = torch.manual_seed(seed)
 
 
@@ -45,8 +50,8 @@ def stable_glass_sd(args_list, multiple_args=True):
     }
 
     if 'model_key' not in args:
-        print("model key is default: sd2.1")
-        args.model_key = 'sd2.1'
+        print("model key is default: sd1.4 (smallest model)")
+        args.model_key = 'sd1.4'
     else:
         print(f"model key is {args.model_key}")
     model_name = models_dict[args.model_key]
@@ -71,7 +76,7 @@ def stable_glass_sd(args_list, multiple_args=True):
                                           end_layer=args.end_layer,
                                           step_layer=args.step_layer,
                                           )
-        pipe = pipe.to("cuda")
+        pipe = pipe.to(device)
         super_res_1_pipe = IFSuperResolutionPipeline.from_pretrained(
             "DeepFloyd/IF-II-L-v1.0",
             text_encoder=None,
@@ -79,7 +84,7 @@ def stable_glass_sd(args_list, multiple_args=True):
             torch_dtype=torch.float16,
             generator=generator,
         )
-        super_res_1_pipe = super_res_1_pipe.to("cuda")
+        super_res_1_pipe = super_res_1_pipe.to(device)
 
     elif args.model_key == 'sd1.4' or args.model_key == 'sd2.1':
         print("Using SD 2.1 or 1.4 model")
@@ -98,7 +103,7 @@ def stable_glass_sd(args_list, multiple_args=True):
         raise ValueError("Model key is not supported")
 
     pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-    pipe = pipe.to("cuda")
+    pipe = pipe.to(device)
 
     for args in args_list:
         if args.model_key == 'sd2.1':
@@ -150,7 +155,7 @@ def stable_glass_sd(args_list, multiple_args=True):
                 os.makedirs(output_folder)
             if not model_name == 'sdxl':
                 print("img_num", img_num)
-                device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+                # Use device from top of function
                 generator = torch.Generator(device.type).manual_seed(seed)
                 for skip_layers in skip_layer_list:
                     if skip_layers is not None:

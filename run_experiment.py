@@ -413,7 +413,7 @@ class CompositionalItem:
         self.root = pos['root']
 
 class CompositionalExperiment:
-    def __init__(self, main_folder_name='diffusion_outputs', img_num=4, blip_model_size='xl'):
+    def __init__(self, main_folder_name='diffusion_outputs', img_num=4, blip_model_size='xl', load_evaluation_models=False):
         self.dataset = None
         self.main_folder_name = main_folder_name
         self.img_num = img_num
@@ -426,13 +426,18 @@ class CompositionalExperiment:
         self.preprocess = preprocess
         self.tokenizer = tokenizer
 
-        self.blip_model_name = f"Salesforce/blip2-flan-t5-{blip_model_size}"
-        self.blip_processor = Blip2Processor.from_pretrained(self.blip_model_name)
-        self.blip_config = AutoConfig.from_pretrained(self.blip_model_name)
-        self.blip_config.max_new_tokens = 64
-        self.blip_model = Blip2ForConditionalGeneration.from_pretrained(
-            self.blip_model_name, torch_dtype=torch.float16, config=self.blip_config
-        )
+        # Only load BLIP if needed for evaluation (not for generation)
+        if load_evaluation_models:
+            self.blip_model_name = f"Salesforce/blip2-flan-t5-{blip_model_size}"
+            self.blip_processor = Blip2Processor.from_pretrained(self.blip_model_name)
+            self.blip_config = AutoConfig.from_pretrained(self.blip_model_name)
+            self.blip_config.max_new_tokens = 64
+            self.blip_model = Blip2ForConditionalGeneration.from_pretrained(
+                self.blip_model_name, torch_dtype=torch.float16, config=self.blip_config
+            )
+        else:
+            self.blip_processor = None
+            self.blip_model = None
 
     def create_dataset(self, set_type, params):
         compositional_items = []
@@ -1166,7 +1171,7 @@ if __name__ == '__main__':
     parser.add_argument('--number_of_inputs', type=int, help='number of inputs',
                         default=-1)
     parser.add_argument('--model_key', type=str, help='model key',
-                        default='v1', choices=['v1', 'sd1.4', 'sd2.1', 'sdxl']), # , 'byt5'])
+                        default='sd1.4', choices=['v1', 'sd1.4', 'sd2.1', 'sdxl']), # , 'byt5']) - sd1.4 is smallest
     parser.add_argument('--img_num', type=int, help='number of images per layer',
                         default=4)
     parser.add_argument('--test_type', type=str, help='test type',
@@ -1215,7 +1220,8 @@ if __name__ == '__main__':
             print("Error: ", error)
 
     compositional_experiment = CompositionalExperiment(main_folder_name=args.folder_name, img_num=args.img_num,
-                                                       blip_model_size=args.blip_model_size)
+                                                       blip_model_size=args.blip_model_size,
+                                                       load_evaluation_models=args.evaluate)
     if args.generate:
         compositional_experiment.run_experiment(set_type=set_type, params=args)
 
